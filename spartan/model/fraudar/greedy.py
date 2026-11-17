@@ -170,6 +170,13 @@ def subsetAboveDegree(M, col_thres, row_thres):
     return M2, rowFilter, colFilter
 
 
+def _fitsMaxSize(maxsize, nRows, nCols):
+    """Return True if a block of the given size satisfies maxsize."""
+    if isinstance(maxsize, (int, float)):
+        return maxsize == -1 or maxsize >= nRows + nCols
+    return maxsize[0] >= nRows and maxsize[1] >= nCols
+
+
 # @profile
 def fastGreedyDecreasing(M, colWeights, maxsize=-1):
     (m, n) = M.shape
@@ -181,8 +188,11 @@ def fastGreedyDecreasing(M, colWeights, maxsize=-1):
     curScore = c2Score(M, rowSet, colSet)
     bestAveScore = curScore / (len(rowSet) + len(colSet))
     bestSets = (rowSet, colSet)
+    # The full matrix is not a valid solution when it exceeds maxsize. Start
+    # below any feasible score so the first feasible block gets recorded.
+    if not _fitsMaxSize(maxsize, len(rowSet), len(colSet)):
+        bestAveScore = float("-inf")
     print("finished setting up greedy")
-    updated = False
     print("InitAveScore: %s with shape (%d, %d)" % (bestAveScore, len(rowSet), len(colSet)))
     rowDeltas = np.squeeze(M.sum(axis=1).A) # *decrease* in total weight when *removing* this row
     colDeltas = np.squeeze(M.sum(axis=0).A)
@@ -220,18 +230,10 @@ def fastGreedyDecreasing(M, colWeights, maxsize=-1):
         numDeleted += 1
         curAveScore = curScore / (len(colSet) + len(rowSet))
 
-        if curAveScore > bestAveScore or (not updated):
-            is_update = False
-            if isinstance(maxsize, (int, float)):
-                if (maxsize==-1 or (maxsize >= len(rowSet) + len(colSet))):
-                    is_update = True
-            elif maxsize[0]>=len(rowSet) and maxsize[1]>=len(colSet):
-                is_update = True
-
-            if is_update:
-                updated = True
-                bestAveScore = curAveScore
-                bestNumDeleted = numDeleted
+        if (curAveScore > bestAveScore
+                and _fitsMaxSize(maxsize, len(rowSet), len(colSet))):
+            bestAveScore = curAveScore
+            bestNumDeleted = numDeleted
             
 
     # reconstruct the best row and column sets
